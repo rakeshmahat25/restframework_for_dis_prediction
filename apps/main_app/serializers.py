@@ -57,6 +57,43 @@ class DoctorSerializer(serializers.ModelSerializer):
         return round(avg_rating, 1) if avg_rating is not None else 0.0
 
 
+from django.core.validators import RegexValidator
+from django.utils.translation import gettext_lazy as _
+from django.contrib.auth import get_user_model
+from .models import Patient
+
+
+class PatientSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Patient
+        fields = [
+            'name',
+            'age',
+            'gender',
+            'mobile_no',
+            'address',
+            'dob'
+        ]
+        extra_kwargs = {
+            'dob': {'write_only': True},  # Hide in responses since we show age
+            'address': {'required': False}  # Make address optional
+        }
+
+    def validate_name(self, value):
+        """Ensure name contains only letters and spaces"""
+        if not all(x.isalpha() or x.isspace() for x in value):
+            raise serializers.ValidationError("Name can only contain letters and spaces")
+        return value.strip()
+
+    def to_representation(self, instance):
+        """Custom representation to include gender display"""
+        representation = super().to_representation(instance)
+        representation['gender'] = instance.get_gender_display()
+        return representation
+
+
+
 class ConsultationCreateSerializer(serializers.ModelSerializer):
     doctor_name = serializers.CharField(write_only=True)
     disease_name = serializers.CharField()

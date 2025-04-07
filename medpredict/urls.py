@@ -11,6 +11,7 @@ from apps.accounts.api import AuthViewSet, UserViewSet
 from apps.main_app.api import (
     PredictionViewSet,
     DoctorViewSet,
+    PatientViewSet,
     ConsultationViewSet,
     SymptomListView,
     DoctorConsultationViewSet,
@@ -28,6 +29,7 @@ router.register("users", UserViewSet, basename="users")
 # Main App
 router.register("predictions", PredictionViewSet, basename="predictions")
 router.register("doctors", DoctorViewSet, basename="doctors")
+router.register("patients", PatientViewSet, basename="patients")
 
 # Separate registrations for patient and doctor consultations
 router.register("consultations", ConsultationViewSet, basename="patient-consultations")
@@ -38,7 +40,7 @@ router.register(
 # Chats App
 router.register("chats", ChatViewSet, basename="chats")
 router.register("feedback", FeedbackViewSet, basename="feedback")
-router.register("Symptoms", SymptomListView, basename="Symptoms")
+
 
 
 def api_home_view(request):
@@ -54,7 +56,7 @@ urlpatterns = [
     path("", api_home_view, name="home"),
     path("api/v1/health/", lambda r: HttpResponse(status=200)),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
-    path("api/v1/docs/", include("rest_framework_docs.urls")),
+    path('api/v1/symptoms/', SymptomListView.as_view({'get': 'list'}), name='symptoms-list'),
 ]
 
 if settings.DEBUG:

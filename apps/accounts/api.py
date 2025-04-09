@@ -69,16 +69,28 @@ class AuthViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
+
     @action(detail=False, methods=["post"], url_path="login")
     def login(self, request):
         try:
+            print("Login attempt with data:", request.data)
+            
             serializer = LoginSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)  # Will throw ValidationError for invalid data
+            
+            if not serializer.is_valid():
+                print(f"Serializer validation failed with errors: {serializer.errors}")
+                return Response(
+                    {"detail": "Invalid email or password"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+                
             user = serializer.validated_data["user"]
+            print(f"User authenticated: {user.email}")
 
             if not user.otp_verified:
+                logger.warning(f"User {user.email} attempted login without OTP verification")
                 return Response(
-                    {"detail": "Please verify your account via OTP."},
+                    {"detail": "Please verify your account via OTP first."},
                     status=status.HTTP_403_FORBIDDEN
                 )
 
@@ -90,20 +102,14 @@ class AuthViewSet(viewsets.ViewSet):
             # Generate tokens
             tokens = get_tokens(user)
             login_res = get_response(user.get_login_response(), tokens)
+            logger.info(f"Successful login for user {user.email}")
             return Response(login_res, status=status.HTTP_200_OK)
 
         except AuthenticationFailed as e:
-            # Handle invalid credentials
-            return Response({"detail": str(e)}, status=status.HTTP_401_UNAUTHORIZED)
-        except ValidationError as e:
-            # Handle serializer validation errors
-            return Response({"detail": e.detail}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            # Catch-all for unexpected errors
-            logger.error(f"Unexpected login error: {str(e)}")
+            logger.warning(f"Authentication failed: {str(e)}")
             return Response(
-                {"detail": "Internal server error"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"detail": str(e)},
+                status=status.HTTP_401_UNAUTHORIZED
             )
 
     @action(detail=False, methods=["post"], url_path="validate-otp")

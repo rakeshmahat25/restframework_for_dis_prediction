@@ -185,6 +185,10 @@ REST_FRAMEWORK = {
 #     "TOKEN_OBTAIN_SERIALIZER": "rest_framework_simplejwt.serializers.TokenObtainPairSerializer",
 # }
 
+AUTHENTICATION_BACKENDS = [
+    'apps.accounts.authentication.EmailBackend',
+    'django.contrib.auth.backends.ModelBackend',  # Keep the default as backup
+]
 from datetime import timedelta
 
 SIMPLE_JWT = {

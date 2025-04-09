@@ -62,9 +62,9 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('api/v1/symptoms/', SymptomListView.as_view({'get': 'list'}), name='symptoms-list'),
     path(
-        'api/v1/doctors/me/availability/', # The URL endpoint
-        DoctorAvailabilityUpdateView.as_view(), # Use .as_view() for class-based views
-        name='doctor-availability-update' # Optional name for reversing
+        'api/v1/doctors/me/availability/', 
+        DoctorAvailabilityUpdateView.as_view(), 
+        name='doctor-availability-update' 
     ),
 ]
 

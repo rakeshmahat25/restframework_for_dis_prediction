@@ -15,6 +15,8 @@ from apps.main_app.api import (
     ConsultationViewSet,
     SymptomListView,
     DoctorConsultationViewSet,
+    SpecializationViewSet,
+    SingleDoctorViewSet,
 )
 
 from apps.chats.api import ChatViewSet, FeedbackViewSet
@@ -28,7 +30,10 @@ router.register("users", UserViewSet, basename="users")
 
 # Main App
 router.register("predictions", PredictionViewSet, basename="predictions")
+router.register("specializations", SpecializationViewSet, basename="specializations")
 router.register("doctors", DoctorViewSet, basename="doctors")
+router.register("single_doctor", SingleDoctorViewSet, basename="single_doctor")
+
 router.register("patients", PatientViewSet, basename="patients")
 
 # Separate registrations for patient and doctor consultations

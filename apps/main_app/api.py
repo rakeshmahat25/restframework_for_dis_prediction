@@ -25,6 +25,8 @@ from .serializers import (
 from apps.accounts.permissions import IsPatient, IsDoctor
 from .utils.data_loader import ML_DATA, MODEL
 import logging
+from django.db.models import Q
+from rest_framework.pagination import PageNumberPagination
 
 logger = logging.getLogger(__name__)
 
@@ -40,32 +42,55 @@ def send_notification(user_id, message):
         logger.error(f"Notification system offline: {str(e)}")
 
 
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 50
+
 class PredictionViewSet(viewsets.ViewSet):
     permission_classes = [IsAuthenticated, IsPatient]
     throttle_scope = "predictions"
+    pagination_class = StandardResultsSetPagination # Add pagination class to the ViewSet
 
+    # --- predict_disease action (keep as is, looks okay) ---
     @action(detail=False, methods=["post"])
     def predict_disease(self, request):
         serializer = SymptomInputSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        symptoms = sorted(serializer.validated_data["symptoms"])
+        # Ensure symptoms is a list of strings if it isn't already
+        symptoms_list = serializer.validated_data["symptoms"]
+        if not isinstance(symptoms_list, list):
+             return Response({"error": "Symptoms must be a list."}, status=status.HTTP_400_BAD_REQUEST)
+
+        symptoms = sorted(symptoms_list)
 
         symptoms_set = set(symptoms)
         concatenated = "".join(symptoms)
         cache_key = f"prediction_{hashlib.md5(concatenated.encode()).hexdigest()}"
 
         if cached := cache.get(cache_key):
+            print("Returning cached prediction") # Debugging
             return Response(cached)
+        print("Cache miss, performing prediction") # Debugging
+
+        # --- ML Prediction Logic ---
+        # Ensure ML_DATA["symptoms"] exists and is a list
+        if "symptoms" not in ML_DATA or not isinstance(ML_DATA["symptoms"], list):
+             logger.error("ML_DATA['symptoms'] is not configured correctly.")
+             return Response({"error": "Diagnosis service configuration error"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         vector = [1 if s in symptoms_set else 0 for s in ML_DATA["symptoms"]]
 
+        disease_idx = -1 # Initialize
         try:
             X_input = pd.DataFrame([vector], columns=ML_DATA["symptoms"])
             disease_idx = MODEL.predict(X_input)[0]
             disease_name = ML_DATA["label_encoder"].inverse_transform([disease_idx])[0]
             confidence = round(MODEL.predict_proba(X_input).max() * 100, 2)
+            print(f"Predicted: {disease_name} with confidence {confidence}") # Debugging
         except IndexError as e:
-            logger.error(f"Invalid disease index {disease_idx}: {str(e)}")
+            logger.error(f"Invalid disease index {disease_idx} from model prediction: {str(e)}")
             return Response(
                 {"error": "Diagnosis service configuration error"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -76,16 +101,28 @@ class PredictionViewSet(viewsets.ViewSet):
                 {"error": "Diagnosis service unavailable"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        # --- End ML Prediction ---
 
         recommended_specialization = ML_DATA["disease_mapping"].get(
             disease_name, "General Physician"
         )
+        print(f"Recommended Specialization: {recommended_specialization}") # Debugging
 
         try:
+             # Ensure request.user has a patient_profile
+            patient_profile = getattr(request.user, 'patient_profile', None)
+            if not patient_profile:
+                # Handle case where user might not have a patient profile yet
+                # Option 1: Create one if needed (requires PatientProfile model logic)
+                # patient_profile = PatientProfile.objects.create(user=request.user, ...)
+                # Option 2: Return an error
+                logger.error(f"User {request.user.id} does not have an associated patient profile.")
+                return Response({"error": "Patient profile not found for user."}, status=status.HTTP_400_BAD_REQUEST)
+
             with transaction.atomic():
                 disease_info = DiseaseInfo.objects.create(
-                    patient=request.user.patient_profile,
-                    symptoms=symptoms,
+                    patient=patient_profile, # Use the fetched profile
+                    symptoms=symptoms, # Store the sorted list
                     disease_name=disease_name,
                     confidence=confidence,
                     no_of_symptoms=len(symptoms),
@@ -97,16 +134,77 @@ class PredictionViewSet(viewsets.ViewSet):
                     "recommended_specialization": recommended_specialization,
                     "prediction_id": disease_info.id,
                 }
-                cache.set(cache_key, result, timeout=3600)
+                cache.set(cache_key, result, timeout=3600) # Cache for 1 hour
+                print(f"Prediction saved with ID: {disease_info.id}") # Debugging
         except Exception as e:
-            logger.error(f"Database error: {str(e)}")
+            logger.error(f"Database error saving prediction: {str(e)}")
             return Response(
                 {"error": "Unable to save prediction result"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
-        return Response(result)
+        return Response(result, status=status.HTTP_200_OK) # Use 200 OK for successful prediction
 
+
+
+class SpecializationViewSet(viewsets.ViewSet):
+    permission_classes = [IsAuthenticated, IsPatient]
+    throttle_scope = "specializations"
+    pagination_class = StandardResultsSetPagination # Add pagination class to the ViewSet
+
+
+    # --- RECOMMENDED DOCTORS (Corrected) ---
+    @action(detail=True, methods=["get"])
+    def recommended_doctors(self, request, pk):
+        """
+        Get paginated list of doctors with the specialization recommended
+        for a specific prediction (identified by pk).
+        """
+        try:
+            # Get the specific disease prediction instance, ensuring it belongs to the current user
+            disease_info = DiseaseInfo.objects.get(
+                id=pk,
+                patient=request.user.patient_profile # Ensure ownership
+            )
+
+            specialization = disease_info.consult_doctor
+            print(f"Fetching doctors for prediction {pk}, specialization: {specialization}") # Debugging
+
+            # Find doctors matching the specialization (case-insensitive)
+            # Assumes Doctor model has 'specialization' field and 'user' ForeignKey
+            doctors_queryset = Doctor.objects.filter(
+                Q(specialization__iexact=specialization) |
+                Q(specialization__icontains=specialization)
+            ).select_related('user').order_by('-rating', 'name') 
+
+            # Paginate the queryset
+            paginator = self.pagination_class() # Use the ViewSet's pagination class
+            result_page = paginator.paginate_queryset(doctors_queryset, request, view=self)
+
+            # Serialize the *paginated* doctors list
+            # Pass context to serializer if it needs the request (e.g., for image URLs)
+            serializer = DoctorSerializer(result_page, many=True, context={'request': request})
+
+            # Return the paginated response
+            # get_paginated_response structures the response with "count", "next", "previous", "results"
+            return paginator.get_paginated_response(serializer.data)
+
+        except DiseaseInfo.DoesNotExist:
+            logger.warning(f"Prediction with id={pk} not found or access denied for user {request.user.id}.")
+            return Response(
+                {"error": "Prediction not found or access denied"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except AttributeError:
+             # This might happen if request.user doesn't have 'patient_profile'
+             logger.error(f"User {request.user.id} does not have 'patient_profile' attribute.")
+             return Response({"error": "User profile configuration error."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Error fetching recommended doctors for prediction {pk}: {str(e)}")
+            return Response(
+                {"error": "Unable to retrieve recommended doctors"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DoctorSerializer
@@ -120,6 +218,114 @@ class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
             .order_by("-year_of_registration")
         )
 
+
+class SingleDoctorViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for retrieving doctor information.
+    - list: Returns all available doctors
+    - retrieve: Returns detailed information about a specific doctor
+    """
+    serializer_class = DoctorSerializer
+    permission_classes = [IsAuthenticated]  # Adjust permissions as needed
+
+    def get_queryset(self):
+        return (
+            Doctor.objects.filter(available=True)
+            .annotate(avg_rating=Avg("ratings__rating"))
+            .select_related("user")
+            .prefetch_related("ratings")
+            .order_by("-year_of_registration")
+        )
+    
+    def retrieve(self, request, pk):
+        """Custom retrieve to add more detailed information for a specific doctor"""
+        try:
+            # Get the doctor with enhanced querying for detailed view
+            doctor = Doctor.objects.filter(id=pk)\
+                .annotate(avg_rating=Avg("ratings__rating"))\
+                .select_related("user")\
+                .prefetch_related(
+                    "ratings", 
+                    "feedbacks",  # Assuming you have these relationships
+                    "consultations"
+                ).first()
+            
+            if not doctor:
+                return Response(
+                    {"error": "Doctor not found or unavailable"},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Use the regular serializer but with more context for the detailed view
+            serializer = self.get_serializer(
+                doctor, 
+                context={'request': request, 'detailed': True}
+            )
+            
+            # Get availability schedule for the doctor (if you have this)
+            # This would need to be adjusted based on your model structure
+            availability = DoctorAvailability.objects.filter(doctor=doctor)
+            availability_data = DoctorAvailabilitySerializer(availability, many=True).data
+            
+            # Get recent feedbacks (limit to 5)
+            recent_feedbacks = doctor.feedbacks.order_by('-created_at')[:5]
+            feedback_data = DoctorFeedbackSerializer(recent_feedbacks, many=True).data
+                
+            # Combine all data
+            result_data = serializer.data
+            result_data.update({
+                'availability': availability_data,
+                'recent_feedbacks': feedback_data,
+                # Add other specific information as needed
+            })
+            
+            return Response(result_data)
+            
+        except Exception as e:
+            logger.error(f"Error retrieving doctor details: {str(e)}")
+            return Response(
+                {"error": "Unable to retrieve doctor details"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
+    @action(detail=True, methods=['get'])
+    def availability(self, request, pk=None):
+        """Endpoint to get a doctor's available time slots"""
+        try:
+            doctor = self.get_object()
+            # Get all available time slots for the doctor
+            # This would need to be adjusted based on your model structure
+            availability = DoctorAvailability.objects.filter(doctor=doctor)
+            serializer = DoctorAvailabilitySerializer(availability, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error retrieving doctor availability: {str(e)}")
+            return Response(
+                {"error": "Unable to retrieve availability information"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['get'])
+    def feedbacks(self, request, pk=None):
+        """Endpoint to get all patient feedback for a doctor"""
+        try:
+            doctor = self.get_object()
+            feedbacks = doctor.feedbacks.all().order_by('-created_at')
+            
+            # Apply pagination
+            page = self.paginate_queryset(feedbacks)
+            if page is not None:
+                serializer = DoctorFeedbackSerializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+                
+            serializer = DoctorFeedbackSerializer(feedbacks, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error retrieving doctor feedbacks: {str(e)}")
+            return Response(
+                {"error": "Unable to retrieve feedback information"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class ConsultationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsPatient]

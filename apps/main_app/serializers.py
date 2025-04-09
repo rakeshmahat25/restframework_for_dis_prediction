@@ -2,9 +2,18 @@ from datetime import date
 from django.utils import timezone
 from rest_framework import serializers
 from apps.accounts.models import User
-from .models import DiseaseInfo, Consultation, Doctor, RatingReview, Patient
+from django.core.exceptions import ValidationError
 from .utils.data_loader import ML_DATA
+import datetime
+from django.core.validators import RegexValidator
+from django.utils.translation import gettext_lazy as _
+from django.contrib.auth import get_user_model
+from .models import Patient, DoctorAvailability, Consultation, RatingReview, Doctor
+from rest_framework import serializers
+from django.contrib.auth import get_user_model # Use this to get the User model
+from .models import Doctor
 
+User = get_user_model()
 
 
 class SymptomInputSerializer(serializers.Serializer):
@@ -29,38 +38,127 @@ class SymptomInputSerializer(serializers.Serializer):
         return sorted(cleaned)
 
 
+
 class DoctorSerializer(serializers.ModelSerializer):
-    id = serializers.UUIDField(source="user_id")
-    is_available = serializers.BooleanField(source="available")
-    years_experience = serializers.SerializerMethodField()
-    rating = serializers.SerializerMethodField()
-    specialization = serializers.CharField(source="get_specialization_display")
+    id = serializers.UUIDField(source='user.id', read_only=True) # Assuming User PK is UUID
+    email = serializers.EmailField(source='user.email', read_only=True)
+    full_name = serializers.SerializerMethodField() # Keep this definition
+    experience_years = serializers.SerializerMethodField()
+    is_available = serializers.BooleanField(source='available', read_only=True)
+    rating = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Doctor
         fields = [
-            "id",
-            "name",
-            "specialization",
-            "rating",
-            "year_of_registration",
-            "years_experience",
-            "is_available",
-            "qualification",
+            'id', 'full_name', 'email', 'specialization', 'experience_years',
+            'qualification', 'gender', 'mobile_no', 'address', 'rating',
+            'is_available', 'registration_no', 'year_of_registration',
+            'state_medical_council', 'dob',
         ]
+        read_only_fields = fields
 
-    def get_years_experience(self, obj):
-        return date.today().year - obj.year_of_registration
+    def get_full_name(self, obj):
+        """
+        Constructs the full name using available fields from the User model
+        or the Doctor model's name field.
+        """
+        if obj.user:
+            user = obj.user
+            
+            first = getattr(user, 'first_name', '')
+            last = getattr(user, 'last_name', '')
+            if first or last:
+                return f"{first} {last}".strip()
 
-    def get_rating(self, obj):
-        avg_rating = getattr(obj, "avg_rating", None)
-        return round(avg_rating, 1) if avg_rating is not None else 0.0
+            if obj.name:
+                 return obj.name
+
+            # --- Option 3: Fallback to User's username field ---
+            if hasattr(user, 'username') and user.username:
+                 return user.username
+            return f"User {user.pk}"
+
+        return "N/A" 
+
+    def get_experience_years(self, obj):
+        # ... (keep this method as before) ...
+        if obj.year_of_registration:
+            try:
+                current_year = datetime.date.today().year
+                experience = current_year - int(obj.year_of_registration)
+                return max(0, experience)
+            except (ValueError, TypeError):
+                return None
+        return None
 
 
-from django.core.validators import RegexValidator
-from django.utils.translation import gettext_lazy as _
-from django.contrib.auth import get_user_model
-from .models import Patient
+class DoctorAvailabilitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DoctorAvailability
+        fields = ['id', 'start_time', 'end_time', 'is_booked']
+
+
+class DoctorAvailabilityUpdateSerializer(serializers.Serializer):
+    """
+    Serializer for updating the doctor's availability status.
+    """
+    available = serializers.BooleanField(required=True)
+
+
+
+class DoctorFeedbackSerializer(serializers.ModelSerializer):
+    """
+    Serializer for displaying Doctor Feedback.
+    Includes patient information safely.
+    """
+    # Include the patient's name for context, but don't expose sensitive info like ID/email by default.
+    # Use a SerializerMethodField for robust handling of different user models and potential null patients.
+    patient_name = serializers.SerializerMethodField()
+    # Format the created_at timestamp for better readability (optional)
+    created_at_formatted = serializers.DateTimeField(source='created_at', format="%Y-%m-%d %H:%M", read_only=True)
+
+    class Meta:
+        model = RatingReview
+        fields = [
+            'id',
+            'rating',
+            'comment',
+            'patient_name', # Include the calculated patient name
+            'created_at', # Raw timestamp (good for sorting/filtering)
+            'created_at_formatted', # User-friendly display format
+        ]
+        # Explicitly make fields read-only if this serializer is *only* for display
+        read_only_fields = fields
+
+    def get_patient_name(self, obj):
+        """
+        Safely retrieves the name of the patient who provided the feedback.
+        Provides fallbacks for different user model fields or anonymous feedback.
+        """
+        # obj is the Feedback instance
+        if obj.patient:
+            user = obj.patient # The user linked via the 'patient' ForeignKey
+
+            # 1. Try standard Django User method (if available)
+            if hasattr(user, 'get_full_name') and user.get_full_name():
+                return user.get_full_name()
+
+            # 2. Fallback: Try combining first_name/last_name attributes
+            first = getattr(user, 'first_name', '')
+            last = getattr(user, 'last_name', '')
+            if first or last:
+                return f"{first} {last}".strip()
+
+            # 3. Fallback: Use username (common fallback)
+            if hasattr(user, 'username') and user.username:
+                return user.username
+
+            # 4. Fallback: If truly no name, use a generic identifier
+            return f"User {user.pk}" # Or "Registered User"
+
+        # Handle cases where patient is NULL (e.g., account deleted or anonymous allowed)
+        return "Anonymous"
+
 
 
 class PatientSerializer(serializers.ModelSerializer):

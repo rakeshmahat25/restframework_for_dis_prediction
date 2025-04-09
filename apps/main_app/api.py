@@ -13,7 +13,7 @@ from django.db.transaction import TransactionManagementError
 from django.core.exceptions import ValidationError
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
-from apps.main_app.models import DiseaseInfo, Consultation, Doctor, RatingReview, Patient
+from apps.main_app.models import DiseaseInfo, Consultation, Doctor, RatingReview, Patient, DoctorAvailability
 from .serializers import (
     SymptomInputSerializer,
     DoctorSerializer,
@@ -21,6 +21,10 @@ from .serializers import (
     ConsultationCreateSerializer,
     ConsultationDetailSerializer,
     RatingSerializer,
+    DoctorAvailabilitySerializer,
+    DoctorAvailabilityUpdateSerializer,
+    DoctorFeedbackSerializer,
+    
 )
 from apps.accounts.permissions import IsPatient, IsDoctor
 from .utils.data_loader import ML_DATA, MODEL
@@ -206,27 +210,18 @@ class SpecializationViewSet(viewsets.ViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = DoctorSerializer
-
-    def get_queryset(self):
-        return (
-            Doctor.objects.filter(available=True)
-            .annotate(avg_rating=Avg("ratings__rating"))
-            .select_related("user")
-            .prefetch_related("ratings")
-            .order_by("-year_of_registration")
-        )
-
-
-class SingleDoctorViewSet(viewsets.ReadOnlyModelViewSet):
+class DoctorDetailViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    ViewSet for retrieving doctor information.
-    - list: Returns all available doctors
-    - retrieve: Returns detailed information about a specific doctor
+    Provides actions related to viewing Doctor details.
+    - list: (/api/v1/doctors/) Returns a list of doctors (consider filtering/pagination).
+    - retrieve: (/api/v1/doctors/{pk}/) Returns details for a single doctor.
+    - availability: (/api/v1/doctors/{pk}/availability/) Custom action for time slots.
+    - feedbacks: (/api/v1/doctors/{pk}/feedbacks/) Custom action for feedback list.) for now in COMMENT
     """
+    
     serializer_class = DoctorSerializer
     permission_classes = [IsAuthenticated]  # Adjust permissions as needed
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         return (
@@ -241,12 +236,12 @@ class SingleDoctorViewSet(viewsets.ReadOnlyModelViewSet):
         """Custom retrieve to add more detailed information for a specific doctor"""
         try:
             # Get the doctor with enhanced querying for detailed view
-            doctor = Doctor.objects.filter(id=pk)\
+            doctor = Doctor.objects.filter(user_id=pk)\
                 .annotate(avg_rating=Avg("ratings__rating"))\
                 .select_related("user")\
                 .prefetch_related(
                     "ratings", 
-                    "feedbacks",  # Assuming you have these relationships
+                    "feedbacks",
                     "consultations"
                 ).first()
             
@@ -268,14 +263,15 @@ class SingleDoctorViewSet(viewsets.ReadOnlyModelViewSet):
             availability_data = DoctorAvailabilitySerializer(availability, many=True).data
             
             # Get recent feedbacks (limit to 5)
-            recent_feedbacks = doctor.feedbacks.order_by('-created_at')[:5]
-            feedback_data = DoctorFeedbackSerializer(recent_feedbacks, many=True).data
+            # recent_feedbacks = doctor.feedbacks.order_by('-created')[:5]
+            # feedback_data = DoctorFeedbackSerializer(recent_feedbacks, many=True).data
                 
             # Combine all data
             result_data = serializer.data
+            print(f"Doctor details retrieved: {result_data}") # Debugging
             result_data.update({
                 'availability': availability_data,
-                'recent_feedbacks': feedback_data,
+                # 'recent_feedbacks': feedback_data,
                 # Add other specific information as needed
             })
             
@@ -305,27 +301,96 @@ class SingleDoctorViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    @action(detail=True, methods=['get'])
-    def feedbacks(self, request, pk=None):
-        """Endpoint to get all patient feedback for a doctor"""
-        try:
-            doctor = self.get_object()
-            feedbacks = doctor.feedbacks.all().order_by('-created_at')
+    # @action(detail=True, methods=['get'])
+    # def feedbacks(self, request, pk=None):
+    #     """Endpoint to get all patient feedback for a doctor"""
+    #     try:
+    #         doctor = self.get_object()
+    #         feedbacks = doctor.feedbacks.all().order_by('-created_at')
             
-            # Apply pagination
-            page = self.paginate_queryset(feedbacks)
-            if page is not None:
-                serializer = DoctorFeedbackSerializer(page, many=True)
-                return self.get_paginated_response(serializer.data)
+    #         # Apply pagination
+    #         page = self.paginate_queryset(feedbacks)
+    #         if page is not None:
+    #             serializer = DoctorFeedbackSerializer(page, many=True)
+    #             return self.get_paginated_response(serializer.data)
                 
-            serializer = DoctorFeedbackSerializer(feedbacks, many=True)
-            return Response(serializer.data)
-        except Exception as e:
-            logger.error(f"Error retrieving doctor feedbacks: {str(e)}")
-            return Response(
-                {"error": "Unable to retrieve feedback information"},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+    #         serializer = DoctorFeedbackSerializer(feedbacks, many=True)
+    #         return Response(serializer.data)
+    #     except Exception as e:
+    #         logger.error(f"Error retrieving doctor feedbacks: {str(e)}")
+    #         return Response(
+    #             {"error": "Unable to retrieve feedback information"},
+    #             status=status.HTTP_500_INTERNAL_SERVER_ERROR
+    #         )
+
+
+
+from rest_framework.views import APIView
+
+
+class DoctorAvailabilityUpdateView(APIView): # Changed base class to APIView
+    """
+    Allows a logged-in doctor to update their availability status.
+
+    Send a PATCH request to /api/v1/doctors/me/availability/ with:
+    {
+        "available": true  // or false
+    }
+
+    A PUT request will also work and perform the same action.
+    """
+    permission_classes = [IsAuthenticated, IsDoctor] # Must be logged in AND be a doctor
+    serializer_class = DoctorAvailabilityUpdateSerializer # Good practice to define for documentation/schema
+
+    def get_object(self):
+        """Helper method to get the doctor profile of the current user."""
+        try:
+           
+            return self.request.user.doctor_profile
+        except Doctor.DoesNotExist:
+            # This case should ideally be prevented by the IsDoctor permission,
+            # but handle it defensively.
+            logger.warning(f"Doctor profile not found for user {self.request.user.pk}")
+            return None
+        except AttributeError:
+             # This happens if the user object somehow doesn't have 'doctor_profile'
+             # Also should be caught by IsDoctor permission.
+             logger.error(f"User {self.request.user.pk} lacks 'doctor_profile' attribute.")
+             return None
+
+    def patch(self, request, *args, **kwargs):
+        """Handles the PATCH request to update availability."""
+        doctor_profile = self.get_object()
+        if not doctor_profile:
+             # If get_object returned None, the user doesn't have a profile
+             return Response(
+                 {"error": "Doctor profile not found for the current user."},
+                 status=status.HTTP_404_NOT_FOUND
+             )
+
+        serializer = DoctorAvailabilityUpdateSerializer(data=request.data)
+
+        if serializer.is_valid():
+            new_availability = serializer.validated_data['available']
+
+            # --- Update the doctor's availability ---
+            doctor_profile.available = new_availability
+            # Use update_fields for efficiency if only changing this field
+            doctor_profile.save(update_fields=['available'])
+            # --- End of Update ---
+
+            logger.info(f"Doctor {request.user.pk} updated availability to {new_availability}")
+            # Return the updated status
+            return Response({"message": "Availability updated successfully.", "available": new_availability}, status=status.HTTP_200_OK)
+        else:
+            # Return validation errors if input is incorrect
+            logger.warning(f"Invalid availability update data for doctor {request.user.pk}: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    def put(self, request, *args, **kwargs):
+        
+        return self.patch(request, *args, **kwargs)
+
 
 class ConsultationViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, IsPatient]

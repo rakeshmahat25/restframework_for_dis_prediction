@@ -10,13 +10,13 @@ from django.http import HttpResponse
 from apps.accounts.api import AuthViewSet, UserViewSet
 from apps.main_app.api import (
     PredictionViewSet,
-    DoctorViewSet,
     PatientViewSet,
     ConsultationViewSet,
     SymptomListView,
     DoctorConsultationViewSet,
     SpecializationViewSet,
-    SingleDoctorViewSet,
+    DoctorDetailViewSet,
+    DoctorAvailabilityUpdateView
 )
 
 from apps.chats.api import ChatViewSet, FeedbackViewSet
@@ -31,8 +31,7 @@ router.register("users", UserViewSet, basename="users")
 # Main App
 router.register("predictions", PredictionViewSet, basename="predictions")
 router.register("specializations", SpecializationViewSet, basename="specializations")
-router.register("doctors", DoctorViewSet, basename="doctors")
-router.register("single_doctor", SingleDoctorViewSet, basename="single_doctor")
+router.register("doctors", DoctorDetailViewSet, basename="doctors")
 
 router.register("patients", PatientViewSet, basename="patients")
 
@@ -62,6 +61,11 @@ urlpatterns = [
     path("api/v1/health/", lambda r: HttpResponse(status=200)),
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('api/v1/symptoms/', SymptomListView.as_view({'get': 'list'}), name='symptoms-list'),
+    path(
+        'api/v1/doctors/me/availability/', # The URL endpoint
+        DoctorAvailabilityUpdateView.as_view(), # Use .as_view() for class-based views
+        name='doctor-availability-update' # Optional name for reversing
+    ),
 ]
 
 if settings.DEBUG:

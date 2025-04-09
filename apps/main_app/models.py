@@ -9,6 +9,7 @@ from django.utils import timezone
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 import logging
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,15 @@ class Doctor(models.Model):
     def __str__(self):
         return f"Doctor {self.name}"
 
+class DoctorAvailability(models.Model):
+    doctor = models.ForeignKey(Doctor, on_delete=models.CASCADE, related_name='availabilities')
+    start_time = models.DateTimeField()
+    end_time = models.DateTimeField()
+    is_booked = models.BooleanField(default=False)
+
+
+    def __str__(self):
+        return f"{self.doctor.name} - {self.start_time.strftime('%Y-%m-%d %H:%M')}"
 
 class DiseaseInfo(models.Model):
     patient = models.ForeignKey(
@@ -283,3 +293,7 @@ class RatingReview(models.Model):
                 fields=["patient", "doctor"], name="one_rating_per_doctor"
             )
         ]
+
+
+
+    

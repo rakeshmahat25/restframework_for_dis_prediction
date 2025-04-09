@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Patient, Doctor, DiseaseInfo, Consultation, RatingReview
+from .models import Patient, Doctor, DiseaseInfo, Consultation, RatingReview, DoctorAvailability
 
 
 @admin.register(Patient)
@@ -8,6 +8,12 @@ class PatientAdmin(admin.ModelAdmin):
     search_fields = ["user__email", "name"]
     list_filter = ["gender"]
     ordering = ["name"]
+
+@admin.register(DoctorAvailability)
+class DoctorAvailabilityAdmin(admin.ModelAdmin):
+    list_display = ('doctor', 'start_time', 'end_time', 'is_booked')
+    list_filter = ('doctor', 'is_booked')
+    search_fields = ('doctor__name',)
 
 
 @admin.register(Doctor)

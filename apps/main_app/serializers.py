@@ -193,37 +193,32 @@ class PatientSerializer(serializers.ModelSerializer):
 
 
 class ConsultationCreateSerializer(serializers.ModelSerializer):
-    doctor_name = serializers.CharField(write_only=True)
+    doctor_id = serializers.CharField(write_only=True)
     disease_name = serializers.CharField()
+    patient_id = serializers.CharField(source="patient.id", read_only=True)
+    message = serializers.CharField()
 
     class Meta:
         model = Consultation
-        fields = ["doctor_name", "disease_name", "message", "consultation_date"]
+        fields = ["doctor_id","patient_id", "disease_name", "message", "consultation_date"]
         extra_kwargs = {"consultation_date": {"required": True}}
 
-    def validate_doctor_name(self, value):
-        # Case-insensitive lookup and handle whitespace
-        doctor_name = value.strip()
-        doctors = Doctor.objects.filter(name__iexact=doctor_name, available=True)
-        if not doctors.exists():
-            raise serializers.ValidationError(
-                "No available doctor found with this name."
-            )
-        if doctors.count() > 1:
-            raise serializers.ValidationError(
-                "Multiple doctors with this name. Please contact support."
-            )
-        doctor = doctors.first()
-        if not doctor.user:
-            raise serializers.ValidationError("Doctor account not properly configured.")
-        return doctor
+    def validate_doctor_id(self, value):
+        try:
+            # Changed from id to user_id
+            doctor = Doctor.objects.get(user_id=value, available=True)
+            if not doctor.user:
+                raise serializers.ValidationError("Doctor account not properly configured.")
+            return doctor
+        except Doctor.DoesNotExist:
+            raise serializers.ValidationError("No available doctor found with this ID.")
 
     def validate(self, attrs):
         # Run base validation first
         attrs = super().validate(attrs)
 
-        # Extract doctor instance from doctor_name field
-        doctor = attrs.pop("doctor_name")  
+        # Get doctor instance from validate_doctor_id
+        doctor = attrs.pop("doctor_id")  
 
         # Add doctor to validated data
         attrs["doctor"] = doctor
@@ -274,10 +269,10 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
     doctor = serializers.PrimaryKeyRelatedField(queryset=Doctor.objects.all())
 
     # Read-only fields for display
-    patient_name = serializers.CharField(source="patient.name", read_only=True)
-    doctor_name = serializers.CharField(source="doctor.name", read_only=True)
+    patient_id = serializers.CharField(source="patient.id", read_only=True)
+    doctor_id = serializers.CharField(source="doctor.id", read_only=True)
     specialist = serializers.CharField(source="get_consult_doctor_display", read_only=True)
-    patient_age = serializers.SerializerMethodField()
+    patient_age = serializers.SerializerMethodField(source="get_patient_age", read_only=True)
     patient_gender = serializers.CharField(source="patient.gender", read_only=True)
 
     class Meta:
@@ -286,9 +281,9 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
             "id",
             "status",
             "patient", 
+            "patient_id",
             "doctor",  
-            "patient_name", 
-            "doctor_name",  
+            "doctor_id",  
             "disease_name",
             "specialist",
             "message",

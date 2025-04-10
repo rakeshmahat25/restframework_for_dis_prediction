@@ -82,6 +82,10 @@ class User(AbstractBaseUser, PermissionsMixin):
             "id": self.id,
             "otp_verified": self.otp_verified,
             "email": self.email,
+            "role":self.user_type,
+            "name":self.username,
+            "fullName":self.full_name
+
         }
         return res
 

@@ -115,7 +115,7 @@ DATABASES = {
           'ENGINE': 'django.db.backends.postgresql',
           'NAME': 'medpredict_db', 
           'USER': 'postgres',  
-          'PASSWORD': 'postgre@123',  
+          'PASSWORD': 'admin',  
           'HOST': '127.0.0.1',  
           'PORT': '5432',  
       }
@@ -148,7 +148,7 @@ AUTH_USER_MODEL = "accounts.User"
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Adjust for frontend origin
+    "http://localhost:5173",  # Adjust for frontend origin
 ]
 
 # REST framework settings

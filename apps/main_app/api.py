@@ -460,6 +460,8 @@ class DoctorConsultationViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"])
     def accept(self, request, pk=None):
         consultation = self.get_object()
+        print(f"Found consultation: {consultation.id}, status: {consultation.status}")
+        
         if consultation.status != "requested":
             return Response(
                 {"error": "Consultation must be in requested state"},

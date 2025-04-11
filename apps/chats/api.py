@@ -80,7 +80,20 @@ class ChatViewSet(viewsets.ModelViewSet):
                 {"error": "Message processing failed"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-
+    @action(detail=False, methods=['get'], url_path='by-consultation/(?P<consultation_id>\d+)')
+    def by_consultation(self, request, consultation_id=None):
+        user = request.user
+        chats = Chat.objects.filter(
+            consultation_id=consultation_id,
+            consultation__participants=user
+        ).select_related('sender', 'consultation')
+        
+        # Apply pagination
+        page = self.paginate_queryset(chats)
+        serializer = self.get_serializer(page, many=True)
+        return self.get_paginated_response(serializer.data)
+    
+    
     @action(detail=True, methods=["post"], url_path="mark-read")
     def mark_read(self, request, pk=None):
         try:

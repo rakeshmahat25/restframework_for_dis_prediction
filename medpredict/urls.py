@@ -16,7 +16,8 @@ from apps.main_app.api import (
     DoctorConsultationViewSet,
     SpecializationViewSet,
     DoctorDetailViewSet,
-    DoctorAvailabilityUpdateView
+    DoctorAvailabilityUpdateView,
+    DoctorPatientViewSet,
 )
 
 from apps.chats.api import ChatViewSet, FeedbackViewSet
@@ -40,6 +41,7 @@ router.register("consultations", ConsultationViewSet, basename="patient-consulta
 router.register(
     "doctor-consultations", DoctorConsultationViewSet, basename="doctor-consultations"
 )
+router.register('doctor-patients', DoctorPatientViewSet, basename='doctor-patients')
 
 # Chats App
 router.register("chats", ChatViewSet, basename="chats")

@@ -301,27 +301,27 @@ class DoctorDetailViewSet(viewsets.ReadOnlyModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-    # @action(detail=True, methods=['get'])
-    # def feedbacks(self, request, pk=None):
-    #     """Endpoint to get all patient feedback for a doctor"""
-    #     try:
-    #         doctor = self.get_object()
-    #         feedbacks = doctor.feedbacks.all().order_by('-created_at')
+    @action(detail=True, methods=['get'])
+    def feedbacks(self, request, pk=None):
+        """Endpoint to get all patient feedback for a doctor"""
+        try:
+            doctor = self.get_object()
+            feedbacks = doctor.feedbacks.all().order_by('-created_at')
             
-    #         # Apply pagination
-    #         page = self.paginate_queryset(feedbacks)
-    #         if page is not None:
-    #             serializer = DoctorFeedbackSerializer(page, many=True)
-    #             return self.get_paginated_response(serializer.data)
+            # Apply pagination
+            page = self.paginate_queryset(feedbacks)
+            if page is not None:
+                serializer = DoctorFeedbackSerializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
                 
-    #         serializer = DoctorFeedbackSerializer(feedbacks, many=True)
-    #         return Response(serializer.data)
-    #     except Exception as e:
-    #         logger.error(f"Error retrieving doctor feedbacks: {str(e)}")
-    #         return Response(
-    #             {"error": "Unable to retrieve feedback information"},
-    #             status=status.HTTP_500_INTERNAL_SERVER_ERROR
-    #         )
+            serializer = DoctorFeedbackSerializer(feedbacks, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            logger.error(f"Error retrieving doctor feedbacks: {str(e)}")
+            return Response(
+                {"error": "Unable to retrieve feedback information"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 
@@ -659,4 +659,69 @@ class PatientViewSet(viewsets.ModelViewSet):
             return Response(
                 {"error": "Failed to update patient profile"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+
+class DoctorPatientViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    ViewSet for doctors to access patient details
+    """
+    serializer_class = PatientSerializer
+    permission_classes = [IsAuthenticated, IsDoctor]  # Assuming you have IsDoctor permission
+    lookup_field = "id"
+    lookup_url_kwarg = "pk"
+
+    def get_queryset(self):
+        # Get patients that the doctor has consultations with
+        doctor = self.request.user.doctor_profile
+        return Patient.objects.filter(
+            consultations__doctor=doctor
+        ).distinct().order_by('user_id')
+    
+    @action(detail=True, methods=['get'])
+    def medical_history(self, request, pk=None):
+        """
+        Get detailed medical history of a patient
+        """
+        try:
+            patient = self.get_object()
+            # Verify doctor has an active or past consultation with this patient
+            doctor = request.user.doctor_profile
+            if not Consultation.objects.filter(doctor=doctor, patient=patient).exists():
+                return Response(
+                    {"error": "You don't have permission to access this patient's details"},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+                
+            # Get medical history details
+            # Adjust these fields based on your actual Patient model
+            medical_data = {
+                "patient_id": patient.id,
+                "name": patient.name,
+                "age": patient.age,
+                "gender": patient.gender,
+                "medical_conditions": patient.medical_conditions,
+                "allergies": patient.allergies,
+                "current_medications": patient.current_medications,
+                "consultation_history": [{
+                    "id": c.id,
+                    "date": c.consultation_date,
+                    "disease": c.disease_name,
+                    "status": c.status
+                } for c in patient.consultations.filter(doctor=doctor)]
+            }
+            
+            return Response(medical_data)
+            
+        except Patient.DoesNotExist:
+            return Response(
+                {"error": "Patient not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error retrieving patient details: {str(e)}", exc_info=True)
+            return Response(
+                {"error": "Failed to retrieve patient details"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )

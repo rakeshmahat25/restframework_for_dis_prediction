@@ -23,6 +23,7 @@ class Chat(models.Model):
     sender = models.ForeignKey(
         User, on_delete=models.CASCADE, related_name="sent_chats"
     )
+    sender_name = models.CharField(max_length=255, blank=True, null=True)
     message = models.TextField(validators=[MinLengthValidator(10)])
     status = models.CharField(
         max_length=20, choices=MESSAGE_STATUS_CHOICES, default="delivered"

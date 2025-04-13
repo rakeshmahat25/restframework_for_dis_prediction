@@ -196,11 +196,12 @@ class ConsultationCreateSerializer(serializers.ModelSerializer):
     doctor_id = serializers.CharField(write_only=True)
     disease_name = serializers.CharField()
     patient_id = serializers.CharField(source="patient.id", read_only=True)
+    patient_name = serializers.CharField(source="patient.name", read_only=True)
     message = serializers.CharField()
 
     class Meta:
         model = Consultation
-        fields = ["doctor_id","patient_id", "disease_name", "message", "consultation_date"]
+        fields = ["doctor_id","patient_id", "patient_name", "disease_name", "message", "consultation_date"]
         extra_kwargs = {"consultation_date": {"required": True}}
 
     def validate_doctor_id(self, value):
@@ -269,6 +270,7 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
     doctor = serializers.PrimaryKeyRelatedField(queryset=Doctor.objects.all())
 
     # Read-only fields for display
+    patient_name = serializers.CharField(source="patient.name", read_only=True)
     patient_id = serializers.CharField(source="patient.id", read_only=True)
     doctor_id = serializers.CharField(source="doctor.id", read_only=True)
     specialist = serializers.CharField(source="get_consult_doctor_display", read_only=True)
@@ -280,7 +282,8 @@ class ConsultationDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "status",
-            "patient", 
+            "patient",
+            "patient_name", 
             "patient_id",
             "doctor",  
             "doctor_id",  

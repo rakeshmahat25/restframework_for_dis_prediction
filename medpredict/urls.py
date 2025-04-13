@@ -33,16 +33,12 @@ router.register("users", UserViewSet, basename="users")
 router.register("predictions", PredictionViewSet, basename="predictions")
 router.register("specializations", SpecializationViewSet, basename="specializations")
 router.register("doctors", DoctorDetailViewSet, basename="doctors")
-
 router.register("patients", PatientViewSet, basename="patients")
-
 # Separate registrations for patient and doctor consultations
 router.register("consultations", ConsultationViewSet, basename="patient-consultations")
 router.register(
-    "doctor-consultations", DoctorConsultationViewSet, basename="doctor-consultations"
-)
+    "doctor-consultations", DoctorConsultationViewSet, basename="doctor-consultations")
 router.register('doctor-patients', DoctorPatientViewSet, basename='doctor-patients')
-
 # Chats App
 router.register("chats", ChatViewSet, basename="chats")
 router.register("feedback", FeedbackViewSet, basename="feedback")
@@ -64,7 +60,7 @@ urlpatterns = [
     path('api-auth/', include('rest_framework.urls', namespace='rest_framework')),
     path('api/v1/symptoms/', SymptomListView.as_view({'get': 'list'}), name='symptoms-list'),
     path(
-        'api/v1/doctors/me/availability/', 
+        'api/v1/doctors-me/availability/', 
         DoctorAvailabilityUpdateView.as_view(), 
         name='doctor-availability-update' 
     ),

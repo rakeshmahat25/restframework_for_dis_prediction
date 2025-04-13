@@ -8,6 +8,8 @@ class ChatSerializer(serializers.ModelSerializer):
         queryset=Consultation.objects.all()
     ) 
     sender = serializers.StringRelatedField(read_only=True)
+    sender_name = serializers.SerializerMethodField(read_only=True)
+    user_type = serializers.SerializerMethodField(read_only=True)  
     timestamp = serializers.DateTimeField(read_only=True)
 
     class Meta:
@@ -17,6 +19,8 @@ class ChatSerializer(serializers.ModelSerializer):
             "created",
             "consultation",
             "sender",
+            "sender_name",
+            "user_type",  # Include for debugging
             "message",
             "status",
             "timestamp",
@@ -25,9 +29,29 @@ class ChatSerializer(serializers.ModelSerializer):
             "id",
             "created",
             "sender",
+            "sender_name",
+            "user_type",
             "status",
             "timestamp",
         ]
+
+    def get_sender_name(self, obj):
+        if obj.sender:
+            # Check if full_name exists and isn't empty
+            if obj.sender.full_name and obj.sender.full_name.strip():
+                return obj.sender.full_name
+            else:
+                # Fallback to email if full_name is None, empty, or whitespace
+                return obj.sender.email
+            # If we reach here, full_name is None, empty, or whitespace
+            
+        return "Sender"
+    
+    def get_user_type(self, obj):
+        # This helps debug if there's a pattern related to user type
+        if obj.sender:
+            return obj.sender.user_type
+        return ""
 
     def validate_consultation(self, value):
         request = self.context.get("request")

@@ -160,14 +160,14 @@ class SignupSerializer(PasswordValidationMixin, serializers.Serializer):
 
         # Generate OTP
         otp = OTP.create(user.id, "Registration")
-        print(f"OTP generated: {otp.otp} for user: {user.email}")  # Debugging
+        print("OTP generated: {otp.otp} for user: {user.email}")  # Debugging
 
         # Send OTP email
         if not settings.DEBUG:
             DjangoMail().send(
                 {
                     "subject": "Registration OTP",
-                    "message": f"Your OTP is {otp.otp}. Please verify your registration.",
+                    "message": "Your OTP is {otp.otp}. Please verify your registration.",
                     "to": [user.email],
                 }
             )

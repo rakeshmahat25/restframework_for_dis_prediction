@@ -190,12 +190,12 @@ class AuthViewSet(viewsets.ViewSet):
             mail = Email()
             mail_data = {
                 "subject": "Password Reset OTP",
-                "message": f"Your OTP is {otp.otp}. Please use it to verify your password reset.",
+                "message": "Your OTP is {otp.otp}. Please use it to verify your password reset.",
                 "to": [user.email],
             }
             mail.send(mail_data)
         return Response(
-            {"message": "OTP has been sent to your email."}, status=status.HTTP_200_OK
+            {"message": "OTP has been sent to your email.", "otp":otp.otp }, status=status.HTTP_200_OK
         )
 
     @action(detail=False, methods=["post"], url_path="reset-password")
@@ -208,10 +208,12 @@ class AuthViewSet(viewsets.ViewSet):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
-            logger.error(f"User with email {email} not found.")
+            logger.error("User with email {email} not found.")
             return Response(
                 {"detail": "Invalid user."}, status=status.HTTP_400_BAD_REQUEST
             )
+            
+           
 
         # Find the valid OTP for the user
         otp_instance = OTP.objects.filter(
@@ -222,6 +224,7 @@ class AuthViewSet(viewsets.ViewSet):
             logger.error(f"No valid OTP found for user {user.id}.")
             return Response(
                 {"detail": "Invalid or expired OTP."},
+            
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -237,7 +240,7 @@ class AuthViewSet(viewsets.ViewSet):
             validate_password(password, user)
         except Exception as e:
             logger.error(f"Password validation failed: {e}")
-            return Response({"detail": e.messages}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": e.messages}, status=status.HTTP_400_BAD_REQUEST)
 
         # Reset password
         user.set_password(password)
@@ -266,8 +269,12 @@ class AuthViewSet(viewsets.ViewSet):
 
         # Return tokens
         tokens = get_tokens(user)
-        login_res = get_response(user.get_login_response(), tokens)
-        return Response(login_res, status=status.HTTP_200_OK)
+        
+      
+        return Response({
+    "message": "Password has been reset successfully.",
+    "results": get_response(user.get_login_response(), tokens)
+}, status=status.HTTP_200_OK)
 
 
 class UserViewSet(viewsets.ModelViewSet):

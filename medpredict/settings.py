@@ -35,7 +35,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "rest_framework",
-    'django_filters',
+    "django_filters",
     "rest_framework_simplejwt",
     "corsheaders",
     "channels",
@@ -47,13 +47,13 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
-    'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     # "main_app.middleware.CustomExceptionHandler",
 ]
 
@@ -97,7 +97,6 @@ TIME_ZONE = "UTC"
 USE_TZ = True
 
 
-
 # DATABASES = {
 #     "default": {
 #         "ENGINE": "django.db.backends.postgresql",
@@ -111,15 +110,15 @@ USE_TZ = True
 # }
 
 DATABASES = {
-      'default': {
-          'ENGINE': 'django.db.backends.postgresql',
-          'NAME': 'medpredict_db', 
-          'USER': 'postgres',  
-          'PASSWORD': 'postgre@123',  
-          'HOST': '127.0.0.1',  
-          'PORT': '5432',  
-      }
-  }
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": "medpredict_db",
+        "USER": "myuser",
+        "PASSWORD": "mypassword",
+        "HOST": "127.0.0.1",
+        "PORT": "5433",
+    }
+}
 
 # Password validation
 AUTH_PASSWORD_VALIDATORS = [
@@ -148,19 +147,18 @@ AUTH_USER_MODEL = "accounts.User"
 
 # CORS settings
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",  # Adjust for frontend origin
+    "http://localhost:5173",  # Adjust for frontend origin
 ]
 
 # REST framework settings
 REST_FRAMEWORK = {
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
     ],
-    
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication', #Optional
-        'rest_framework.authentication.BasicAuthentication' #Optional
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "rest_framework.authentication.SessionAuthentication",  # Optional
+        "rest_framework.authentication.BasicAuthentication",  # Optional
     ],
     # "DEFAULT_RENDERER_CLASSES": [
     #     "nothing_for_now.renderers.CustomRenderer",
@@ -186,43 +184,41 @@ REST_FRAMEWORK = {
 # }
 
 AUTHENTICATION_BACKENDS = [
-    'apps.accounts.authentication.EmailBackend',
-    'django.contrib.auth.backends.ModelBackend',  # Keep the default as backup
+    "apps.accounts.authentication.EmailBackend",
+    "django.contrib.auth.backends.ModelBackend",  # Keep the default as backup
 ]
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60), # e.g., 1 hour
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False, # Set to True if you want a new refresh token on refresh
-    'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': True, # Update user's last_login field upon login
-
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY, # Uses Django's SECRET_KEY by default
-    'VERIFYING_KEY': None,
-    'AUDIENCE': None,
-    'ISSUER': None,
-    'JWK_URL': None,
-    'LEEWAY': 0,
-
-    'AUTH_HEADER_TYPES': ('Bearer',), # Expect 'Authorization: Bearer <token>'
-    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
-
-    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
-    'TOKEN_TYPE_CLAIM': 'token_type',
-    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
-
-    'JTI_CLAIM': 'jti',
-
-    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
-    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5), # Not used if ROTATE_REFRESH_TOKENS is False
-    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1), # Not used if ROTATE_REFRESH_TOKENS is False
-
-    'TOKEN_OBTAIN_SERIALIZER': 'accounts.serializers.MyTokenObtainPairSerializer',
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=60),  # e.g., 1 hour
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ROTATE_REFRESH_TOKENS": False,  # Set to True if you want a new refresh token on refresh
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,  # Update user's last_login field upon login
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": SECRET_KEY,  # Uses Django's SECRET_KEY by default
+    "VERIFYING_KEY": None,
+    "AUDIENCE": None,
+    "ISSUER": None,
+    "JWK_URL": None,
+    "LEEWAY": 0,
+    "AUTH_HEADER_TYPES": ("Bearer",),  # Expect 'Authorization: Bearer <token>'
+    "AUTH_HEADER_NAME": "HTTP_AUTHORIZATION",
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+    "USER_AUTHENTICATION_RULE": "rest_framework_simplejwt.authentication.default_user_authentication_rule",
+    "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
+    "TOKEN_TYPE_CLAIM": "token_type",
+    "TOKEN_USER_CLASS": "rest_framework_simplejwt.models.TokenUser",
+    "JTI_CLAIM": "jti",
+    "SLIDING_TOKEN_REFRESH_EXP_CLAIM": "refresh_exp",
+    "SLIDING_TOKEN_LIFETIME": timedelta(
+        minutes=5
+    ),  # Not used if ROTATE_REFRESH_TOKENS is False
+    "SLIDING_TOKEN_REFRESH_LIFETIME": timedelta(
+        days=1
+    ),  # Not used if ROTATE_REFRESH_TOKENS is False
+    "TOKEN_OBTAIN_SERIALIZER": "accounts.serializers.MyTokenObtainPairSerializer",
 }
 
 # Email configuration

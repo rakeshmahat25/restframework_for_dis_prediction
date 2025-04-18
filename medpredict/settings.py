@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from datetime import timedelta
-
+from decouple import config
 # import json
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -22,7 +22,7 @@ MODEL_PATH = os.path.join(ML_DATA_DIR, "trained_model.pkl")
 SECRET_KEY = "django-insecure-*s=!%jcl8kowop84hn^jx8#qv2@ooscx2&y-!p=1*zfz0=@@r9"
 
 
-DEBUG = True  # Set to False to enable email sending
+DEBUG = False  # Set to False to enable email sending
 
 ALLOWED_HOSTS = ["*"]  # Update with specific domains in production
 
@@ -227,8 +227,9 @@ EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
-EMAIL_HOST_USER = ""
-EMAIL_HOST_PASSWORD = ""
+EMAIL_HOST_USER = config("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
+
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
